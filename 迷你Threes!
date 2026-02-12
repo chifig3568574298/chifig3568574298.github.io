@@ -332,408 +332,441 @@
             </ul>
         </div>
     </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // 游戏变量
-            const gridSize = 4;
-            let grid = [];
-            let score = 0;
-            let highScore = localStorage.getItem('threesHighScore') || 0;
-            let nextTileValue = 0;
-            let gameOver = false;
-            
-            // DOM元素
-            const gameBoard = document.getElementById('game-board');
-            const scoreDisplay = document.getElementById('score');
-            const highScoreDisplay = document.getElementById('high-score');
-            const nextTileDisplay = document.getElementById('next-tile');
-            const gameOverScreen = document.getElementById('game-over');
-            const finalScoreDisplay = document.getElementById('final-score');
-            const newGameButton = document.getElementById('new-game');
-            const restartButton = document.getElementById('restart');
-            
-            // 初始化游戏
-            function initGame() {
-                grid = Array(gridSize).fill().map(() => Array(gridSize).fill(0));
-                score = 0;
-                gameOver = false;
-                scoreDisplay.textContent = score;
-                highScoreDisplay.textContent = highScore;
-                gameOverScreen.style.display = 'none';
-                
-                // 生成下一个方块
-                generateNextTile();
-                
-                // 添加初始方块
-                addRandomTile();
-                addRandomTile();
-                
-                // 渲染游戏板
-                renderGrid();
-            }
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 游戏变量
+        const gridSize = 4;
+        let grid = [];
+        let score = 0;
+        let highScore = localStorage.getItem('threesHighScore') || 0;
+        let nextTileValue = 0;
+        let gameOver = false;
+        let recentTiles = []; // 记录最近生成的方块，用于平衡运气
+        
+        // DOM元素
+        const gameBoard = document.getElementById('game-board');
+        const scoreDisplay = document.getElementById('score');
+        const highScoreDisplay = document.getElementById('high-score');
+        const nextTileDisplay = document.getElementById('next-tile');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const newGameButton = document.getElementById('new-game');
+        const restartButton = document.getElementById('restart');
+        
+        // 初始化游戏
+        function initGame() {
+            grid = Array(gridSize).fill().map(() => Array(gridSize).fill(0));
+            score = 0;
+            gameOver = false;
+            recentTiles = []; // 重置历史记录
+            scoreDisplay.textContent = score;
+            highScoreDisplay.textContent = highScore;
+            gameOverScreen.style.display = 'none';
             
             // 生成下一个方块
-            function generateNextTile() {
-                // 90%概率生成1或2，10%概率生成3
-                const rand = Math.random();
-                if (rand < 0.9) {
-                    nextTileValue = Math.random() < 0.5 ? 1 : 2;
-                } else {
-                    nextTileValue = 3;
-                }
-                
-                // 更新显示
-                nextTileDisplay.textContent = nextTileValue;
-                nextTileDisplay.className = 'next-tile';
-                nextTileDisplay.classList.add(`tile-${nextTileValue}`);
-            }
+            generateNextTile();
             
-            // 在随机空位置添加方块
-            function addRandomTile() {
-                const emptyCells = [];
-                
-                // 找到所有空单元格
-                for (let r = 0; r < gridSize; r++) {
-                    for (let c = 0; c < gridSize; c++) {
-                        if (grid[r][c] === 0) {
-                            emptyCells.push({r, c});
-                        }
-                    }
-                }
-                
-                if (emptyCells.length > 0) {
-                    // 随机选择一个空单元格
-                    const {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-                    
-                    // 放置下一个方块
-                    grid[r][c] = nextTileValue;
-                    
-                    // 生成新的下一个方块
-                    generateNextTile();
-                    
-                    return true;
-                }
-                
-                return false;
-            }
+            // 添加初始方块
+            addRandomTile();
+            addRandomTile();
             
             // 渲染游戏板
-            function renderGrid() {
-                // 清除所有现有方块
-                document.querySelectorAll('.tile').forEach(tile => tile.remove());
-                
-                const cellSize = gameBoard.offsetWidth / gridSize - 10;
-                
-                // 添加所有方块
-                for (let r = 0; r < gridSize; r++) {
-                    for (let c = 0; c < gridSize; c++) {
-                        if (grid[r][c] !== 0) {
-                            const tile = document.createElement('div');
-                            tile.className = `tile tile-${grid[r][c]}`;
-                            tile.textContent = grid[r][c];
-                            
-                            // 计算位置
-                            tile.style.width = `${cellSize}px`;
-                            tile.style.height = `${cellSize}px`;
-                            tile.style.left = `${c * (cellSize + 10) + 10}px`;
-                            tile.style.top = `${r * (cellSize + 10) + 10}px`;
-                            
-                            gameBoard.appendChild(tile);
-                        }
-                    }
+            renderGrid();
+        }
+        
+        // 生成下一个方块（改进版，避免连续出现太多相同数字）
+        function generateNextTile() {
+            let candidate;
+            
+            // 检查最近3个生成的方块
+            const recentOnes = recentTiles.filter(tile => tile === 1).length;
+            const recentTwos = recentTiles.filter(tile => tile === 2).length;
+            const recentThrees = recentTiles.filter(tile => tile === 3).length;
+            
+            // 如果最近生成了太多1，就增加生成2或3的概率
+            if (recentOnes >= 3) {
+                candidate = Math.random() < 0.7 ? 2 : (Math.random() < 0.5 ? 3 : 1);
+            }
+            // 如果最近生成了太多2，就增加生成1或3的概率
+            else if (recentTwos >= 3) {
+                candidate = Math.random() < 0.7 ? 1 : (Math.random() < 0.5 ? 3 : 2);
+            }
+            // 如果最近生成了太多3，就增加生成1或2的概率
+            else if (recentThrees >= 2) {
+                candidate = Math.random() < 0.8 ? (Math.random() < 0.5 ? 1 : 2) : 3;
+            }
+            // 正常概率分布
+            else {
+                const rand = Math.random();
+                if (rand < 0.45) {
+                    candidate = 1;
+                } else if (rand < 0.9) {
+                    candidate = 2;
+                } else {
+                    candidate = 3;
                 }
             }
             
-            // 移动方块
-            function move(direction) {
-                if (gameOver) return false;
-                
-                let moved = false;
-                const oldGrid = JSON.parse(JSON.stringify(grid));
-                
-                // 根据方向处理移动
-                switch(direction) {
-                    case 'up':
-                        moved = moveUp();
-                        break;
-                    case 'down':
-                        moved = moveDown();
-                        break;
-                    case 'left':
-                        moved = moveLeft();
-                        break;
-                    case 'right':
-                        moved = moveRight();
-                        break;
-                }
-                
-                // 如果移动有效，添加新方块并检查游戏状态
-                if (moved) {
-                    addRandomTile();
-                    renderGrid();
-                    checkGameOver();
-                }
-                
-                return moved;
+            // 更新历史记录（只保留最近5个）
+            recentTiles.push(candidate);
+            if (recentTiles.length > 5) {
+                recentTiles.shift();
             }
             
-            // 向上移动
-            function moveUp() {
-                let moved = false;
-                
+            nextTileValue = candidate;
+            
+            // 更新显示
+            nextTileDisplay.textContent = nextTileValue;
+            nextTileDisplay.className = 'next-tile';
+            nextTileDisplay.classList.add(`tile-${nextTileValue}`);
+        }
+        
+        // 在随机空位置添加方块
+        function addRandomTile() {
+            const emptyCells = [];
+            
+            // 找到所有空单元格
+            for (let r = 0; r < gridSize; r++) {
                 for (let c = 0; c < gridSize; c++) {
-                    for (let r = 1; r < gridSize; r++) {
-                        if (grid[r][c] !== 0) {
-                            let newR = r;
-                            
-                            // 向上移动直到遇到障碍
-                            while (newR > 0 && grid[newR-1][c] === 0) {
-                                grid[newR-1][c] = grid[newR][c];
-                                grid[newR][c] = 0;
-                                newR--;
-                                moved = true;
-                            }
-                            
-                            // 检查是否可以合并
-                            if (newR > 0 && canMerge(grid[newR][c], grid[newR-1][c])) {
-                                grid[newR-1][c] = mergeTiles(grid[newR][c], grid[newR-1][c]);
-                                grid[newR][c] = 0;
-                                score += grid[newR-1][c];
-                                scoreDisplay.textContent = score;
-                                moved = true;
-                            }
-                        }
+                    if (grid[r][c] === 0) {
+                        emptyCells.push({r, c});
                     }
                 }
-                
-                return moved;
             }
             
-            // 向下移动
-            function moveDown() {
-                let moved = false;
+            if (emptyCells.length > 0) {
+                // 随机选择一个空单元格
+                const {r, c} = emptyCells[Math.floor(Math.random() * emptyCells.length)];
                 
-                for (let c = 0; c < gridSize; c++) {
-                    for (let r = gridSize-2; r >= 0; r--) {
-                        if (grid[r][c] !== 0) {
-                            let newR = r;
-                            
-                            // 向下移动直到遇到障碍
-                            while (newR < gridSize-1 && grid[newR+1][c] === 0) {
-                                grid[newR+1][c] = grid[newR][c];
-                                grid[newR][c] = 0;
-                                newR++;
-                                moved = true;
-                            }
-                            
-                            // 检查是否可以合并
-                            if (newR < gridSize-1 && canMerge(grid[newR][c], grid[newR+1][c])) {
-                                grid[newR+1][c] = mergeTiles(grid[newR][c], grid[newR+1][c]);
-                                grid[newR][c] = 0;
-                                score += grid[newR+1][c];
-                                scoreDisplay.textContent = score;
-                                moved = true;
-                            }
-                        }
-                    }
-                }
+                // 放置下一个方块
+                grid[r][c] = nextTileValue;
                 
-                return moved;
-            }
-            
-            // 向左移动
-            function moveLeft() {
-                let moved = false;
-                
-                for (let r = 0; r < gridSize; r++) {
-                    for (let c = 1; c < gridSize; c++) {
-                        if (grid[r][c] !== 0) {
-                            let newC = c;
-                            
-                            // 向左移动直到遇到障碍
-                            while (newC > 0 && grid[r][newC-1] === 0) {
-                                grid[r][newC-1] = grid[r][newC];
-                                grid[r][newC] = 0;
-                                newC--;
-                                moved = true;
-                            }
-                            
-                            // 检查是否可以合并
-                            if (newC > 0 && canMerge(grid[r][newC], grid[r][newC-1])) {
-                                grid[r][newC-1] = mergeTiles(grid[r][newC], grid[r][newC-1]);
-                                grid[r][newC] = 0;
-                                score += grid[r][newC-1];
-                                scoreDisplay.textContent = score;
-                                moved = true;
-                            }
-                        }
-                    }
-                }
-                
-                return moved;
-            }
-            
-            // 向右移动
-            function moveRight() {
-                let moved = false;
-                
-                for (let r = 0; r < gridSize; r++) {
-                    for (let c = gridSize-2; c >= 0; c--) {
-                        if (grid[r][c] !== 0) {
-                            let newC = c;
-                            
-                            // 向右移动直到遇到障碍
-                            while (newC < gridSize-1 && grid[r][newC+1] === 0) {
-                                grid[r][newC+1] = grid[r][newC];
-                                grid[r][newC] = 0;
-                                newC++;
-                                moved = true;
-                            }
-                            
-                            // 检查是否可以合并
-                            if (newC < gridSize-1 && canMerge(grid[r][newC], grid[r][newC+1])) {
-                                grid[r][newC+1] = mergeTiles(grid[r][newC], grid[r][newC+1]);
-                                grid[r][newC] = 0;
-                                score += grid[r][newC+1];
-                                scoreDisplay.textContent = score;
-                                moved = true;
-                            }
-                        }
-                    }
-                }
-                
-                return moved;
-            }
-            
-            // 检查两个方块是否可以合并
-            function canMerge(a, b) {
-                return (a === 1 && b === 2) || (a === 2 && b === 1) || (a === b && a >= 3);
-            }
-            
-            // 合并两个方块
-            function mergeTiles(a, b) {
-                if ((a === 1 && b === 2) || (a === 2 && b === 1)) {
-                    return 3;
-                } else if (a === b && a >= 3) {
-                    return a + b;
-                }
-                return a;
-            }
-            
-            // 检查游戏是否结束
-            function checkGameOver() {
-                // 检查是否有空单元格
-                for (let r = 0; r < gridSize; r++) {
-                    for (let c = 0; c < gridSize; c++) {
-                        if (grid[r][c] === 0) {
-                            return false;
-                        }
-                    }
-                }
-                
-                // 检查是否还有可合并的相邻方块
-                for (let r = 0; r < gridSize; r++) {
-                    for (let c = 0; c < gridSize; c++) {
-                        const current = grid[r][c];
-                        
-                        // 检查右侧
-                        if (c < gridSize-1 && canMerge(current, grid[r][c+1])) {
-                            return false;
-                        }
-                        
-                        // 检查下方
-                        if (r < gridSize-1 && canMerge(current, grid[r+1][c])) {
-                            return false;
-                        }
-                    }
-                }
-                
-                // 游戏结束
-                gameOver = true;
-                
-                // 更新最高分
-                if (score > highScore) {
-                    highScore = score;
-                    localStorage.setItem('threesHighScore', highScore);
-                    highScoreDisplay.textContent = highScore;
-                }
-                
-                // 显示游戏结束屏幕
-                finalScoreDisplay.textContent = score;
-                gameOverScreen.style.display = 'flex';
+                // 生成新的下一个方块
+                generateNextTile();
                 
                 return true;
             }
             
-            // 触摸事件处理
-            let startX, startY;
+            return false;
+        }
+        
+        // 渲染游戏板（保持不变）
+        function renderGrid() {
+            // 清除所有现有方块
+            document.querySelectorAll('.tile').forEach(tile => tile.remove());
             
-            gameBoard.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-                const touch = e.touches[0];
-                startX = touch.clientX;
-                startY = touch.clientY;
-            });
+            const cellSize = gameBoard.offsetWidth / gridSize - 10;
             
-            gameBoard.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                if (!startX || !startY) return;
-                
-                const touch = e.changedTouches[0];
-                const diffX = touch.clientX - startX;
-                const diffY = touch.clientY - startY;
-                
-                // 确定滑动方向
-                if (Math.abs(diffX) > Math.abs(diffY)) {
-                    // 水平滑动
-                    if (Math.abs(diffX) > 10) {
-                        if (diffX > 0) {
-                            move('right');
-                        } else {
-                            move('left');
-                        }
+            // 添加所有方块
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    if (grid[r][c] !== 0) {
+                        const tile = document.createElement('div');
+                        tile.className = `tile tile-${grid[r][c]}`;
+                        tile.textContent = grid[r][c];
+                        
+                        // 计算位置
+                        tile.style.width = `${cellSize}px`;
+                        tile.style.height = `${cellSize}px`;
+                        tile.style.left = `${c * (cellSize + 10) + 10}px`;
+                        tile.style.top = `${r * (cellSize + 10) + 10}px`;
+                        
+                        gameBoard.appendChild(tile);
                     }
-                } else {
-                    // 垂直滑动
-                    if (Math.abs(diffY) > 10) {
-                        if (diffY > 0) {
-                            move('down');
-                        } else {
-                            move('up');
+                }
+            }
+        }
+        
+        // 移动方块（保持不变）
+        function move(direction) {
+            if (gameOver) return false;
+            
+            let moved = false;
+            const oldGrid = JSON.parse(JSON.stringify(grid));
+            
+            // 根据方向处理移动
+            switch(direction) {
+                case 'up':
+                    moved = moveUp();
+                    break;
+                case 'down':
+                    moved = moveDown();
+                    break;
+                case 'left':
+                    moved = moveLeft();
+                    break;
+                case 'right':
+                    moved = moveRight();
+                    break;
+            }
+            
+            // 如果移动有效，添加新方块并检查游戏状态
+            if (moved) {
+                addRandomTile();
+                renderGrid();
+                checkGameOver();
+            }
+            
+            return moved;
+        }
+        
+        // 其他函数保持不变...
+        // 向上移动
+        function moveUp() {
+            let moved = false;
+            
+            for (let c = 0; c < gridSize; c++) {
+                for (let r = 1; r < gridSize; r++) {
+                    if (grid[r][c] !== 0) {
+                        let newR = r;
+                        
+                        // 向上移动直到遇到障碍
+                        while (newR > 0 && grid[newR-1][c] === 0) {
+                            grid[newR-1][c] = grid[newR][c];
+                            grid[newR][c] = 0;
+                            newR--;
+                            moved = true;
+                        }
+                        
+                        // 检查是否可以合并
+                        if (newR > 0 && canMerge(grid[newR][c], grid[newR-1][c])) {
+                            grid[newR-1][c] = mergeTiles(grid[newR][c], grid[newR-1][c]);
+                            grid[newR][c] = 0;
+                            score += grid[newR-1][c];
+                            scoreDisplay.textContent = score;
+                            moved = true;
                         }
                     }
                 }
-                
-                startX = null;
-                startY = null;
-            });
+            }
             
-            // 键盘控制（用于测试）
-            document.addEventListener('keydown', function(e) {
-                switch(e.key) {
-                    case 'ArrowUp':
-                        move('up');
-                        break;
-                    case 'ArrowDown':
-                        move('down');
-                        break;
-                    case 'ArrowLeft':
-                        move('left');
-                        break;
-                    case 'ArrowRight':
-                        move('right');
-                        break;
+            return moved;
+        }
+        
+        // 向下移动
+        function moveDown() {
+            let moved = false;
+            
+            for (let c = 0; c < gridSize; c++) {
+                for (let r = gridSize-2; r >= 0; r--) {
+                    if (grid[r][c] !== 0) {
+                        let newR = r;
+                        
+                        // 向下移动直到遇到障碍
+                        while (newR < gridSize-1 && grid[newR+1][c] === 0) {
+                            grid[newR+1][c] = grid[newR][c];
+                            grid[newR][c] = 0;
+                            newR++;
+                            moved = true;
+                        }
+                        
+                        // 检查是否可以合并
+                        if (newR < gridSize-1 && canMerge(grid[newR][c], grid[newR+1][c])) {
+                            grid[newR+1][c] = mergeTiles(grid[newR][c], grid[newR+1][c]);
+                            grid[newR][c] = 0;
+                            score += grid[newR+1][c];
+                            scoreDisplay.textContent = score;
+                            moved = true;
+                        }
+                    }
                 }
-            });
+            }
             
-            // 按钮事件
-            newGameButton.addEventListener('click', initGame);
-            restartButton.addEventListener('click', initGame);
+            return moved;
+        }
+        
+        // 向左移动
+        function moveLeft() {
+            let moved = false;
             
-            // 初始化游戏
-            initGame();
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 1; c < gridSize; c++) {
+                    if (grid[r][c] !== 0) {
+                        let newC = c;
+                        
+                        // 向左移动直到遇到障碍
+                        while (newC > 0 && grid[r][newC-1] === 0) {
+                            grid[r][newC-1] = grid[r][newC];
+                            grid[r][newC] = 0;
+                            newC--;
+                            moved = true;
+                        }
+                        
+                        // 检查是否可以合并
+                        if (newC > 0 && canMerge(grid[r][newC], grid[r][newC-1])) {
+                            grid[r][newC-1] = mergeTiles(grid[r][newC], grid[r][newC-1]);
+                            grid[r][newC] = 0;
+                            score += grid[r][newC-1];
+                            scoreDisplay.textContent = score;
+                            moved = true;
+                        }
+                    }
+                }
+            }
+            
+            return moved;
+        }
+        
+        // 向右移动
+        function moveRight() {
+            let moved = false;
+            
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = gridSize-2; c >= 0; c--) {
+                    if (grid[r][c] !== 0) {
+                        let newC = c;
+                        
+                        // 向右移动直到遇到障碍
+                        while (newC < gridSize-1 && grid[r][newC+1] === 0) {
+                            grid[r][newC+1] = grid[r][newC];
+                            grid[r][newC] = 0;
+                            newC++;
+                            moved = true;
+                        }
+                        
+                        // 检查是否可以合并
+                        if (newC < gridSize-1 && canMerge(grid[r][newC], grid[r][newC+1])) {
+                            grid[r][newC+1] = mergeTiles(grid[r][newC], grid[r][newC+1]);
+                            grid[r][newC] = 0;
+                            score += grid[r][newC+1];
+                            scoreDisplay.textContent = score;
+                            moved = true;
+                        }
+                    }
+                }
+            }
+            
+            return moved;
+        }
+        
+        // 检查两个方块是否可以合并
+        function canMerge(a, b) {
+            return (a === 1 && b === 2) || (a === 2 && b === 1) || (a === b && a >= 3);
+        }
+        
+        // 合并两个方块
+        function mergeTiles(a, b) {
+            if ((a === 1 && b === 2) || (a === 2 && b === 1)) {
+                return 3;
+            } else if (a === b && a >= 3) {
+                return a + b;
+            }
+            return a;
+        }
+        
+        // 检查游戏是否结束
+        function checkGameOver() {
+            // 检查是否有空单元格
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    if (grid[r][c] === 0) {
+                        return false;
+                    }
+                }
+            }
+            
+            // 检查是否还有可合并的相邻方块
+            for (let r = 0; r < gridSize; r++) {
+                for (let c = 0; c < gridSize; c++) {
+                    const current = grid[r][c];
+                    
+                    // 检查右侧
+                    if (c < gridSize-1 && canMerge(current, grid[r][c+1])) {
+                        return false;
+                    }
+                    
+                    // 检查下方
+                    if (r < gridSize-1 && canMerge(current, grid[r+1][c])) {
+                        return false;
+                    }
+                }
+            }
+            
+            // 游戏结束
+            gameOver = true;
+            
+            // 更新最高分
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('threesHighScore', highScore);
+                highScoreDisplay.textContent = highScore;
+            }
+            
+            // 显示游戏结束屏幕
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.style.display = 'flex';
+            
+            return true;
+        }
+        
+        // 触摸事件处理（保持不变）
+        let startX, startY;
+        
+        gameBoard.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
         });
-    </script>
+        
+        gameBoard.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            if (!startX || !startY) return;
+            
+            const touch = e.changedTouches[0];
+            const diffX = touch.clientX - startX;
+            const diffY = touch.clientY - startY;
+            
+            // 确定滑动方向
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                // 水平滑动
+                if (Math.abs(diffX) > 10) {
+                    if (diffX > 0) {
+                        move('right');
+                    } else {
+                        move('left');
+                    }
+                }
+            } else {
+                // 垂直滑动
+                if (Math.abs(diffY) > 10) {
+                    if (diffY > 0) {
+                        move('down');
+                    } else {
+                        move('up');
+                    }
+                }
+            }
+            
+            startX = null;
+            startY = null;
+        });
+        
+        // 键盘控制（用于测试）
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case 'ArrowUp':
+                    move('up');
+                    break;
+                case 'ArrowDown':
+                    move('down');
+                    break;
+                case 'ArrowLeft':
+                    move('left');
+                    break;
+                case 'ArrowRight':
+                    move('right');
+                    break;
+            }
+        });
+        
+        // 按钮事件
+        newGameButton.addEventListener('click', initGame);
+        restartButton.addEventListener('click', initGame);
+        
+        // 初始化游戏
+        initGame();
+    });
+</script>                                                                     
 </body>
 </html>
