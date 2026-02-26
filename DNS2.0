@@ -1,0 +1,121 @@
+// Cloudflare Worker - 智能 DNS 代理
+// 路由: 所有请求
+
+const UPSTREAM = {
+  cloudflare: 'https://cloudflare-dns.com/dns-query',
+  aliyun: 'https://dns.alidns.com/resolve'
+};
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const path = url.pathname;
+
+    // CORS 预检
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Accept'
+        }
+      });
+    }
+
+    // 健康检查
+    if (path === '/health') {
+      return jsonResponse({ status: 'ok', service: 'smart-dns-proxy' });
+    }
+
+    // 只处理 DNS 查询路径
+    if (path !== '/dns-query') {
+      return new Response('Not Found', { status: 404 });
+    }
+
+    try {
+      // 获取要查询的域名
+      const domain = extractDomain(request);
+      
+      // 根据后缀选择上游 DNS
+      const upstreamUrl = selectUpstream(domain);
+      
+      // 转发请求到上游 DNS
+      const response = await forwardToUpstream(request, upstreamUrl);
+      
+      return response;
+
+    } catch (err) {
+      return jsonResponse({ error: err.message }, 500);
+    }
+  }
+};
+
+// 从请求中提取域名（支持 DoH 两种模式）
+function extractDomain(request) {
+  const url = new URL(request.url);
+  
+  // 方式1: GET 请求 ?name=example.com
+  if (url.searchParams.has('name')) {
+    return url.searchParams.get('name');
+  }
+  
+  // 方式2: 从 DNS wire format 解码（简化版，实际需解包）
+  // 这里返回空，让上游处理
+  return '';
+}
+
+// 智能选择上游 DNS
+function selectUpstream(domain) {
+  if (!domain) return UPSTREAM.cloudflare;
+  
+  const tld = domain.split('.').pop().toLowerCase();
+  
+  // .cn 域名走阿里 DNS
+  if (tld === 'cn' || domain.endsWith('.com.cn') || domain.endsWith('.net.cn')) {
+    return UPSTREAM.aliyun;
+  }
+  
+  // 其他走 Cloudflare
+  return UPSTREAM.cloudflare;
+}
+
+// 转发请求到上游
+async function forwardToUpstream(request, upstreamUrl) {
+  const url = new URL(request.url);
+  const targetUrl = new URL(upstreamUrl);
+  
+  // 复制查询参数
+  targetUrl.search = url.search;
+  
+  // 构造新请求头
+  const headers = new Headers(request.headers);
+  headers.set('Host', targetUrl.host);
+  
+  const upstreamRequest = new Request(targetUrl.toString(), {
+    method: request.method,
+    headers: headers,
+    body: request.method === 'POST' ? await request.arrayBuffer() : null
+  });
+
+  const response = await fetch(upstreamRequest);
+  
+  // 包装响应，添加 CORS
+  const newHeaders = new Headers(response.headers);
+  newHeaders.set('Access-Control-Allow-Origin', '*');
+  newHeaders.set('X-DNS-Provider', targetUrl.host);
+  
+  return new Response(response.body, {
+    status: response.status,
+    headers: newHeaders
+  });
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    }
+  });
+}
