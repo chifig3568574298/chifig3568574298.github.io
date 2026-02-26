@@ -1,0 +1,63 @@
+// 多上游 DNS 镜像，自动故障转移
+const UPSTREAMS = [
+  'https://cloudflare-dns.com/dns-query',
+  'https://dns.google/dns-query',
+  'https://dns.quad9.net/dns-query'
+];
+
+export default {
+  async fetch(request) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Accept'
+        }
+      });
+    }
+
+    const url = new URL(request.url);
+    if (url.pathname !== '/dns-query') {
+      return new Response(null, { status: 404 });
+    }
+
+    // 依次尝试每个上游
+    for (let i = 0; i < UPSTREAMS.length; i++) {
+      const upstream = new URL(UPSTREAMS[i]);
+      upstream.search = url.search;
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3000); // 3秒超时
+
+        const response = await fetch(upstream.toString(), {
+          method: request.method,
+          signal: controller.signal,
+          headers: {
+            'accept': request.headers.get('accept') || 'application/dns-message',
+            'content-type': request.headers.get('content-type')
+          },
+          body: request.method === 'POST' ? request.body : null
+        });
+
+        clearTimeout(timeout);
+
+        if (response.ok) {
+          return new Response(response.body, {
+            status: response.status,
+            headers: {
+              'content-type': response.headers.get('content-type') || 'application/dns-message',
+              'Access-Control-Allow-Origin': '*'
+            }
+          });
+        }
+      } catch (err) {
+        console.log(`Upstream ${i + 1} failed:`, err.message);
+        continue; // 尝试下一个
+      }
+    }
+
+    return new Response('All upstreams failed', { status: 502 });
+  }
+};
